@@ -1,0 +1,48 @@
+# =============================================================================
+# Quick demo settings (≈ 1.5–2 h on 2 CPU cores for all scripts; ≈ 6 GB RAM is enough).
+# Same pipeline as default.yaml, with fixed hyper-parameters (no grid search),
+# fewer trees, fewer random splits, calibration draws and bootstrap resamples.
+# =============================================================================
+extends: default.yaml
+
+n_jobs: 2
+tune: false
+
+fixed_params:
+  RF: {n_estimators: 150}
+
+solace:
+  optical_params: {n_estimators: 100, min_samples_leaf: 8}
+  classifier_params: {n_estimators: 100}
+  final_params: {n_estimators: 150}
+  tune_optical: false
+  tune_classifier: false
+  tune_final: false
+
+controls:
+  svr_plus: {C: [1, 10], epsilon: [0.1], gamma_priv: 1.0}
+  multitask: {hidden: [[50]]}
+  distillation: {lambdas: [0.5]}
+  negative_control_random_removals: 10
+
+validation:
+  n_random_splits: 5
+  block_lengths: [1, 2, 4, 8]
+  buffers: [1]
+  offsets: false
+  n_boot: 500
+  seeds_replicates: 3
+
+subset_benchmark:
+  n_splits: 3
+  tune: false
+  algorithms: [RF, LR, SVR]
+
+shap:
+  max_background: 25
+
+calibration:
+  n_draws: 10
+  sizes: [3, 10, 20]
+  n_draws_size: 5
+  importance_repeats: 3

@@ -1,0 +1,114 @@
+# =============================================================================
+# CascadePAHs – full analysis protocol of the paper
+# (hyper-parameter grids of Table S28; 50 random splits; 200 calibration draws)
+#
+# Runtime: many hours on a desktop computer. Use configs/fast.yaml for a demo.
+# =============================================================================
+
+paths:
+  paired: data/demo/paired_samples.csv          # 242 complete PAH–optical–sensor paired samples
+  onstation: data/demo/onstation_readings.csv   # raw on-station sonde readings (sensor–sample matching)
+  hf: data/demo/hf_sonde_records.csv            # high-frequency sonde survey records (unlabelled)
+  application: data/demo/application_period.csv # 22 Jul–22 Aug 2024 target-site samples (ΣPAHs only)
+  rainfall: data/demo/rainfall_daily.csv
+  raw_spectra: data/demo/raw_spectra             # UV–vis + EEM example spectra
+  results: results
+
+random_state: 42
+n_jobs: 2              # parallel outer folds / calibration draws (joblib)
+model_n_jobs: 1        # threads inside each forest
+n_inner: 5             # inner folds grouped by survey date (tuning and cross-fitting)
+alpha: 0.10            # 90 % prediction intervals
+
+tune: true             # tune hyper-parameters inside every training set (date-grouped CV)
+
+# ---------------------------------------------------------------- Table S28
+grids:
+  RF:
+    n_estimators: [100, 200, 300]
+    max_depth: [null, 10, 20, 30]
+    min_samples_split: [2, 5, 10]
+  XGBoost:
+    n_estimators: [100, 200, 300]
+    learning_rate: [0.01, 0.1, 0.2]
+    max_depth: [3, 6, 9]
+    subsample: [0.6, 0.8, 1.0]
+  LR:                  # L2-regularised linear regression, alpha = logspace(-4, 3, 20)
+    alpha: [0.0001, 0.000233572, 0.000545559, 0.00127427, 0.00297635, 0.00695193, 0.0162378, 0.0379269,
+            0.0885867, 0.206914, 0.483293, 1.12884, 2.63665, 6.15848, 14.3845, 33.5982, 78.476, 183.298,
+            428.133, 1000.0]
+  DNN:
+    hidden_layer_sizes: [[32, 16], [64, 32], [128, 64]]
+    activation: [relu, tanh]
+    solver: [adam]
+    learning_rate_init: [0.0001, 0.001]
+    alpha: [0.0001, 0.001, 0.01]
+    batch_size: [16, 32]
+    max_iter: [1000]
+  MLP:
+    hidden_layer_sizes: [[50], [100], [100, 100]]
+    activation: [relu, tanh]
+    solver: [adam, sgd]
+    learning_rate_init: [0.001, 0.01]
+  SVR:
+    kernel: [rbf, linear]
+    C: [0.1, 1, 10, 100]
+    epsilon: [0.01, 0.1, 0.2]
+
+# parameters used when tune: false (and as fixed base values)
+fixed_params:
+  RF: {n_estimators: 300}
+  XGBoost: {n_estimators: 200, learning_rate: 0.1, max_depth: 3, subsample: 0.8}
+  LR: {alpha: 1.0}
+  DNN: {hidden_layer_sizes: [64, 32], learning_rate_init: 0.001, alpha: 0.001, batch_size: 16}
+  MLP: {hidden_layer_sizes: [100], learning_rate_init: 0.001}
+  SVR: {kernel: rbf, C: 10, epsilon: 0.1}
+
+# ---------------------------------------------------------------- SOLACE
+solace:
+  leaf_targets: crossfit     # crossfit | insample  (see docs/METHODS.md)
+  # Leaf size of the optical forest (sets the size of the leaf vocabulary).
+  optical_params: {n_estimators: 200, min_samples_leaf: 8}
+  classifier_params: {n_estimators: 200}
+  final_params: {n_estimators: 300}
+  tune_optical: true         # optical forest and leaf classifier tuned over the RF grid
+  tune_classifier: true
+  tune_final: true
+
+controls:
+  svr_plus: {C: [0.1, 1, 10, 100], epsilon: [0.01, 0.1, 0.5], gamma_priv: 1.0}
+  multitask: {hidden: [[50], [100], [100, 100]]}
+  distillation: {lambdas: [0.25, 0.5, 0.75]}
+  two_stage: {n_estimators: [100, 200, 300]}
+  negative_control_random_removals: 100
+
+# ---------------------------------------------------------------- validation
+validation:
+  n_random_splits: 50
+  test_size: 0.2
+  block_days: 4
+  block_lengths: [1, 2, 3, 4, 6, 8]
+  buffers: [1, 2]
+  offsets: true
+  n_boot: 2000
+  seeds_replicates: 20       # random-seed replicates (Note S3.5)
+
+subset_benchmark:            # Fig. 3a: 127 sensor subsets × 6 algorithms
+  scheme: random
+  n_splits: 50
+  tune: true
+  algorithms: [RF, SVR, XGBoost, LR, DNN, MLP]
+
+intervals:
+  quantiles: [0.05, 0.95]
+  thresholds: {upper_tertile: null, median: null}   # null -> computed from the summer samples
+
+shap:
+  max_background: 200        # all training samples of a fold (n ≤ 142)
+
+calibration:
+  n_cal: 10
+  n_draws: 200
+  sizes: [3, 5, 10, 15, 20]
+  n_draws_size: 200
+  importance_repeats: 10

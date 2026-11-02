@@ -1,0 +1,47 @@
+# =============================================================================
+# Minimal settings to check that every script runs (a few minutes).
+# Numbers produced with these settings are meaningless.
+# =============================================================================
+extends: fast.yaml
+
+paths:
+  results: results_smoke
+
+fixed_params:
+  RF: {n_estimators: 30}
+  XGBoost: {n_estimators: 30, learning_rate: 0.1, max_depth: 3, subsample: 0.8}
+  DNN: {hidden_layer_sizes: [16, 8], learning_rate_init: 0.001, alpha: 0.001, batch_size: 16, max_iter: 200}
+  MLP: {hidden_layer_sizes: [16], learning_rate_init: 0.001, max_iter: 200}
+
+solace:
+  optical_params: {n_estimators: 30, min_samples_leaf: 8}
+  classifier_params: {n_estimators: 30}
+  final_params: {n_estimators: 30}
+
+controls:
+  svr_plus: {C: [1], epsilon: [0.1], gamma_priv: 1.0}
+  multitask: {hidden: [[16]]}
+  distillation: {lambdas: [0.5]}
+  two_stage: {n_estimators: [30]}
+  negative_control_random_removals: 2
+
+validation:
+  n_random_splits: 2
+  block_lengths: [1, 4]
+  buffers: [1]
+  offsets: false
+  n_boot: 50
+  seeds_replicates: 1
+
+subset_benchmark:
+  n_splits: 1
+  algorithms: [LR]
+
+shap:
+  max_background: 8
+
+calibration:
+  n_draws: 2
+  sizes: [3, 10]
+  n_draws_size: 1
+  importance_repeats: 1
